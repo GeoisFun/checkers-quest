@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Checkers</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(8, 50px);
+      grid-template-rows: repeat(8, 50px);
+      gap: 1px;
+      margin: 20px auto;
+      width: 420px;
+      height: 420px;
+    }
+    .cell {
+      width: 50px;
+      height: 50px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: #333;
+    }
+    .cell.black {
+      background-color: #EEE;
+    }
+    .piece {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+    }
+    .red {
+      background-color: red;
+    }
+    .red_kg {
+      background-color: rgb(255, 129, 129);
+    }
+    .black-piece {
+      background-color: black;
+    }
+    .black_kg {
+      background-color: rgb(148, 142, 142);
+    }
+  </style>
+</head>
+<body>
+  <h1>Welcome to Andy's Checkers!</h1>
+  <div class="board" id="board"></div>
+
+  <script>
+    let board = [];
+    let currentPlayer = 1; // 1 for black, -1 for red
+    let selectedPiece = null;
+
+    // Fetch initial board state from backend
+    function getBoard() {
+      fetch('/get_board')
+        .then(response => response.json())
+        .then(data => {
+          board = data;
+          renderBoard();
+        })
+        .catch(error => console.error('Error fetching board:', error));
+    }
+
+    // Render the board on the frontend
+    function renderBoard() {
+      const boardContainer = document.getElementById('board');
+      boardContainer.innerHTML = ''; // Clear previous board rendering
+
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const cell = document.createElement('div');
+          cell.classList.add('cell');
+          if ((row + col) % 2 === 1) cell.classList.add('black'); // Checkered pattern
+
+          if (board[row][col] !== 0) {
+            const piece = document.createElement('div');
+            piece.classList.add('piece');
+            if (board[row][col] === 1) {
+              piece.classList.add('black-piece');
+            } else if (board[row][col] === 2) {
+              piece.classList.add('black_kg');
+            }else if (board[row][col] === -1) {
+              piece.classList.add('red');
+            }else if (board[row][col] === -2) {
+              piece.classList.add('red_kg');
+            }
+            cell.appendChild(piece);
+          }
+
+          // Attach event listeners to cells
+          cell.setAttribute('data-row', row);
+          cell.setAttribute('data-col', col);
+          cell.addEventListener('click', handleClick);
+          boardContainer.appendChild(cell);
+        }
+      }
+    }
+
+    // Handle cell click (selecting and moving pieces)
+    function handleClick(event) {
+      const cell = event.target.closest('.cell');
+      if (!cell) return;
+
+      const row = parseInt(cell.getAttribute('data-row'));
+      const col = parseInt(cell.getAttribute('data-col'));
+      if (isNaN(row) || isNaN(col)) return;
+
+      if (!selectedPiece) {
+        // Selecting a piece
+        if (board[row][col] !== 0 && (board[row][col] === currentPlayer)) {
+          selectedPiece = { row, col };
+        }
+        else if (board[row][col] !== 0 && (board[row][col] === 2*currentPlayer)) {
+          selectedPiece = { row, col };
+        }
+      } else {
+        // Moving the selected piece
+        temppiece = board[selectedPiece.row][selectedPiece.col] 
+        movePiece(selectedPiece, { row, col }, temppiece);
+        selectedPiece = null; // Reset selected piece after move
+      }
+    }
+
+    // Move the piece (validate and send to backend)
+    function movePiece(from, to, piece) {
+      if (isValidMove(from, to, piece)) {
+        //board[capturerow][capturecol] = 0
+        board[to.row][to.col] = board[from.row][from.col];
+        board[from.row][from.col] = 0;
+        
+        // Send move to the backend
+        fetch("/move", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            board: board,
+            player: currentPlayer
+          })
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.board) {
+            board = data.board; // Update board from server response
+            renderBoard();
+          } else {
+            console.log("Move failed: ", data.message || "Unknown error");
+          }
+        })
+        .catch(error => console.error("Error making move:", error));
+      } else {
+        console.log("Invalid move!");
+      }
+    }
+
+      //Multi-capture (double or triple jumps)
+    function canCaptureAgain(row, col, piece) {
+        const redpawndirections = [[-2, -2], [-2, 2]];
+        const blackpawndirections = [[2, -2], [2, 2]];
+        const kingdirections = [[-2, -2], [-2, 2], [2, -2], [2, 2]];
+        if (piece == 1) {
+          for (const [dx, dy] of redpawndirections) {
+              const newRow = row + dx;
+              const newCol = col + dy;
+              if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+                  const midRow = row + dx/2;
+                  const midCol = col + dy/2;
+                  if (board[newRow][newCol] == 0 && board[midRow][midCol] !== 0 && Math.sign(board[midRow][midCol]) !== Math.sign(piece)) {
+                      return [midRow, midCol];
+                  } else {
+                    return false
+                  }
+              } else {
+                return false
+              }
+          }
+        }
+        if (piece == -1) {
+          for (const [dx, dy] of blackpawndirections) {
+              const newRow = row + dx;
+              const newCol = col + dy;
+              if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+                  const midRow = row + dx/2;
+                  const midCol = col + dy/2;
+                  if (board[newRow][newCol] == 0 && board[midRow][midCol] !== 0 && Math.sign(board[midRow][midCol]) !== Math.sign(piece)) {
+                      return [midRow, midCol];
+                  } else {
+                    return false
+                  }
+              } else {
+                return false
+              }
+          }
+        }
+        if (Math.abs(piece) == 2) {
+          for (const [dx, dy] of kingdirections) {
+              const newRow = row + dx;
+              const newCol = col + dy;
+              if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+                  const midRow = row + dx/2;
+                  const midCol = col + dy/2;
+                  if (board[newRow][newCol] == 0 && board[midRow][midCol] !== 0 && Math.sign(board[midRow][midCol]) !== Math.sign(piece)) {
+                      return [midRow, midCol];
+                  } else {
+                    return false
+                  }
+              } else {
+                return false
+              }
+          }
+        }
+    }
+
+    // Simple move validation: only allows diagonal movement
+    async function isValidMove(from, to, piece) {
+      const response = await fetch("/send-value", {
+          method: "POST",
+          headers: {
+              "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ board: board })
+      });
+
+      const available_moves = await response.json();
+
+      // Now you can use available_moves safely
+      console.log(available_moves, "first check");
+      
+      let captures = []
+      let captureResult = canCaptureAgain(from.row, from.col, piece);
+      console.log(captureResult)
+      if (captureResult != false) {
+        console.log(captureResult)
+        let [capture_row, capture_col] = captureResult;
+        captures.push([capture_row, capture_col])
+        captureResult = canCaptureAgain(from.row, from.col, piece);
+        if (captureResult != false) {
+          [capture_row, capture_col] = captureResult;
+          captures.push([capture_row, capture_col])
+          captureResult = canCaptureAgain(from.row, from.col, piece);
+          if (captureResult != false) {
+            [capture_row, capture_col] = captureResult;
+            captures.push([capture_row, capture_col])
+          }  
+        }
+      }
+      if (captures[0] == undefined) {
+        firstcapture = null
+      } else {
+        firstcapturerow = captures[0][0]
+        firstcapturecol = captures[0][1]
+        firstcapture = [firstcapturerow, firstcapturecol]
+      }
+      if (captures[1] == undefined) {
+        secondcapture = null
+      } else {
+        secondcapturerow = captures[1][0]
+        secondcapturecol = captures[1][1]
+        secondcapture = [secondcapturerow, secondcapturecol]
+      }
+      if (captures[2] == undefined) {
+        thirdcapture = null
+      } else {
+        thirdcapturerow = captures[2][0]
+        thirdcapturecol = captures[2][1]
+        thirdcapture = [thirdcapturerow, thirdcapturecol]
+      }
+      move = [[from.row, from.col], [to.row, to.col], firstcapture, secondcapture, thirdcapture]
+      console.log(available_moves, "available")
+      console.log(move, "Chosen")
+      //TO DO LATER: Check move system and match with checkers.py
+      if (move in available_moves) {
+        return true
+      }
+      console.log(move in available_moves)
+      // if (available_moves.some(m => JSON.stringify(m) === JSON.stringify(move))) {
+      //   return true;
+      // }
+      return false;
+    }
+    // Start the game and render the initial board
+    getBoard();
+  </script>
+</body>
+</html>
