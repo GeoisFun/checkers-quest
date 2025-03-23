@@ -124,21 +124,29 @@
         else if (board[row][col] === 2*currentPlayer) {
           selectedPiece = { row, col };
         }
+
+        if (selectedPiece) {
+          // TODO: UNHIGHLIGHT THE SELECTED PIECE WHEN DONE
+          cell.setAttribute("style", "background-color: yellow;");
+        }
+
+        return;
       } else {
         // Moving the selected piece
         let piece = board[selectedPiece.row][selectedPiece.col];
-        movePiece(selectedPiece, { row, col }, piece);
+        if (!movePiece(selectedPiece, { row, col }, piece)) {
+          return;
+        }
         if (Math.abs(selectedPiece.row-row) == 2 && Math.abs(selectedPiece.col-col == 2)) {
           let nextCaptures = canCaptureAgain(row, col, piece);
-
           if (nextCaptures && nextCaptures.length > 0) {
             forcedCapture = true;
             forcedPiece = { row, col };
             possibleDestinations = nextCaptures;
           }
         }
-      
       }
+
       if (forcedCapture) {
             // We're in forced capture mode
             if (row === forcedPiece.row && col === forcedPiece.col) {
@@ -171,7 +179,7 @@
             // Clicked an invalid square — ignore
             return;
       }
-      selectedPiece = null; // Reset selected piece after move 
+      selectedPiece = null; // Reset selected piece after move
     }
 
       
@@ -212,27 +220,24 @@
       }
     }
 
-    async function isValidMove(from, to, piece, special_case = null) {
-      const response = await fetch("/send-value", {
+    function isValidMove(from, to, piece, special_case = null) {
+      fetch("/send-value", {
           method: "POST",
           headers: {
               "Content-Type": "application/json"
           },
           body: JSON.stringify({ board: board })
+      })
+      .then(response => response.json())
+      .then(available_moves => {
+        if (Math.abs(from.row-to.row) == 2 && Math.abs(from.col-to.col) == 2) {
+        move = [[from.row, from.col], [to.row, to.col], [(from.row+to.row)/2, (from.col+to.col)/2], null, null]
+        } else if (Math.abs(from.row-to.row) == 1 && Math.abs(from.col-to.col) == 1) {
+          //Nulling the 1st, 2nd, 3rd captures because this is only for normal moves, no captures
+          move = [[from.row, from.col], [to.row, to.col], null, null, null]
+        }
+        console.log("AVAILABLE MOVES: ", available_moves, move in available_moves);
       });
-
-      const available_moves = await response.json();
-
-      if (Math.abs(from[0]-to[0]) == 2 && Math.abs(from[1]-to[1]) == 2) {
-        move = [[from[0], from[1]], [to[0], to[1]], [(from[0]+to[0])/2, (from[1]+to[1])/2], null, null]
-
-      } else if (Math.abs(from[0]-to[0]) == 1 && Math.abs(from[1]-to[1]) == 1) {
-        //Nulling the 1st, 2nd, 3rd captures because this is only for normal moves, no captures
-        move = [[from[0], from[1]], [to[0], to[1]], null, null, null]
-
-      } else {
-        return false
-      }
       
       // console.log(available_moves, "available")
 
@@ -240,85 +245,50 @@
       if (move in available_moves) {
         return true
       }
-      //console.log(move in available_moves)
 
       return false;
     }
 
     function movePiece(from, to, piece) {
-      
-      if (Math.abs(from[0]-to[0]) == 1 && Math.abs(from[1]-to[1]) == 1) {
-        //Normal, non-capture move
-        if (isValidMove(from, to, piece)) {
-
-          // UPDATES BOARD for frontend
-          board[from[0]][from[1]] = 0
-          board[to[0]][to[1]] = piece
-
-          // Send move to the backend
-          fetch("/move", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              board: board,
-              player: currentPlayer
-            })
-          })
-          .then(response => response.json())
-          .then(data => {
-            if (data.board) {
-              board = data.board; // Update board from server response
-              renderBoard();
-              moves = data.move;
-            } else {
-              console.log("Move failed: ", data.message || "Unknown error");
-            }
-          })
-          .catch(error => console.error("Error making move:", error));
-        } else {
-          console.log("Invalid move!");
-        }
-
-      } else if (Math.abs(from[0]-to[0]) == 2 && Math.abs(from[1]-to[1]) == 2) {
-          if (isValidMove(from, to, piece)){
-  
-                //updating board
-                board[from[0]][from[1]] = 0
-                board[(from[0]+to[0])/2][(from[1]+to[1])/2] = 0
-                board[to[0]][to[1]] = piece
-
-                // Send move to the backend
-                fetch("/move", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json"
-                  },
-                  body: JSON.stringify({
-                    board: board,
-                    player: currentPlayer
-                  })
-                })
-                .then(response => response.json())
-                .then(data => {
-                  if (data.board) {
-                    board = data.board; // Update board from server response
-                    renderBoard();
-                    moves = data.move;
-                  } else {
-                    console.log("Move failed: ", data.message || "Unknown error");
-                  }
-                })
-                .catch(error => console.error("Error making move:", error));
-              
-          } else {
-            console.log("Invalid move!");
-          }
-        
-      } else {
-        console.log("Invalid move! or Please try capturing the pieces one at a time, you can chain capture, but only move by move");
+      if (!isValidMove) {
+        console.error("INVALID MOVE")
+        return false;
       }
+
+      if (Math.abs(from.row-to.row) == 1 && Math.abs(from.col-to.col) == 1) {
+        board[from.row][from.col] = 0
+        board[to.row][to.col] = piece
+      } else if (Math.abs(from.row-to.row) == 2 && Math.abs(from.col-to.col) == 2) {
+        //updating board
+        board[from.row][from.col] = 0
+        board[(from.row+to.row)/2][(from.col+to.col)/2] = 0
+        board[to.row][to.col] = piece
+      }
+
+      // Send move to the backend
+      fetch("/move", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          board: board,
+          player: currentPlayer
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.board) {
+          board = data.board; // Update board from server response
+          renderBoard();
+          moves = data.move;
+        } else {
+          console.log("Move failed: ", data.message || "Unknown error");
+        }
+      })
+      .catch(error => console.error("Error making move: ", error));
+
+      return true;
     }
     // Start the game and render the initial board
     getBoard();
