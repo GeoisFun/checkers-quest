@@ -28,14 +28,8 @@ def move():
     data = request.json
     board_state = data.get("board")
     curr_player = data.get("player")
-<<<<<<< HEAD:app.py
     #I think we need to switch current player by -1
     if curr_player == -1:
-=======
-    if curr_player == -1:
-        game.curr_turn = -1
-    else:
->>>>>>> 6abc6f9dc31bf4062358d9dfbae43f28ea66ab6b:server.py
         game.curr_turn = 1
     else:
         game.curr_turn = -1
