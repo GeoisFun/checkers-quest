@@ -3,9 +3,8 @@ import checkers  # Importing the Checkers class and Move class
 import random
 import numpy as np
 import copy
-import ast
 
-app = Flask(__name__)
+app = Flask("checkers")
 
 # Initialize the checkers game
 game = checkers.Checkers()
@@ -28,11 +27,13 @@ def move():
     #Precursors
     data = request.json
     board_state = data.get("board")
-
-    if data.get("player") == -1:
-        game.curr_turn = -1
-    else:
+    curr_player = data.get("player")
+    #I think we need to switch current player by -1
+    if curr_player == -1:
         game.curr_turn = 1
+    else:
+        game.curr_turn = -1
+    print("curplayer", curr_player)
 
     # Update the board from list to Numpy (Since Javascript only recognizes lists)
     game.board = np.array(board_state)
@@ -52,7 +53,7 @@ def move():
     # Apply the move
     game.make_move(chosen_move)
     game.check_king()
-
+    print("after move made, to check if move has been switched")
     # Send the updated board back to the client
     updated_board = game.board.tolist()  # Convert the numpy array to a list for JSON serialization
     #DEBUG:  print("After Move: ", updated_board)    
@@ -68,9 +69,9 @@ def move():
 @app.route('/send-value', methods=['POST'])
 def receive_value():
     #Precursors
-    data = request.json  
-    move_board = data.get("board") 
-    #DEBUG: print(type(move_board), "type") 
+    data = request.json
+    move_board = data.get("board")
+    #DEBUG: print(type(move_board), "type")
 
     #To Find Available Moves without having to code the function into Index.Html
     original_board = copy.deepcopy(game.board)
